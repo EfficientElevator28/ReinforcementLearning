@@ -32,13 +32,19 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from torch.distributions import Categorical
 
-n_floors = 5
+n_floors = 5#20
 state_size = n_floors*4 
+reward_num_people = True
 
 use_softmax = False
+use_RNN = False #Don't use
 device = torch.device("cpu")
 n_actions = n_floors #number floors
 param_file = "1elevator_parameters"+str(n_floors)
+if (use_RNN and reward_num_people): folder = 'RNN_figures_num_people'
+elif (not use_RNN and reward_num_people): folder = 'figures_num_people'
+elif (use_RNN and not reward_num_people): folder = 'RNN_figures_num_people'
+else: folder = 'figures_wait_time'
 
 # ===============================================================
 class DQN(nn.Module):
@@ -104,11 +110,11 @@ def run_rl_v1_test():
     # simulation.
     # Note: poisson_mean_density=.2 (means average spawn .2 people per second), seconds_to_schedule=100000 (don't
     # exceed this system time which is tracked in sim.total_time).
-    person_scheduler = PersonScheduler(building, poisson_mean_density=.05, seconds_to_schedule=100000)
+    person_scheduler = PersonScheduler(building, poisson_mean_density=.05, seconds_to_schedule=1000000)
     print(person_scheduler.people_spawning[:10])
 
     model = DQN(n_actions, state_size).to(device)
-    model.load_state_dict(torch.load(param_file))
+    model.load_state_dict(torch.load(folder+'/'+param_file))
     
     state,_,_ = sim.rl_step(starting_time=0, action=0,
                                               person_scheduler=person_scheduler) #for first step

@@ -13,20 +13,21 @@ from src.elevator import *
 import time
 import pyglet as pyglet
 
+n_floors = 20
 
 class Simulation_for_RL:
     def __init__(self):
         self.sim = Simulator('RL_V1', step_func=realistic_physics_step_func, reward_func=reward_sum_people,
                     rl_step_func=rl_step_func_v1)
         self.elevators = [Elevator(1)]
-        self.building = Building(name=1, elevators=self.elevators, n_floors=10)
+        self.building = Building(name=1, elevators=self.elevators, n_floors=n_floors)
         self.sim.init_building(self.building)
         
         # The person_scheduler is only externally dependent on the starting_time which is fed to the rl_step in the
         # simulation.
         # Note: poisson_mean_density=.2 (means average spawn .2 people per second), seconds_to_schedule=100000 (don't
         # exceed this system time which is tracked in sim.total_time).
-        self.person_scheduler = PersonScheduler(self.building, poisson_mean_density=.05, seconds_to_schedule=100000)
+        self.person_scheduler = PersonScheduler(self.building, poisson_mean_density=.05, seconds_to_schedule=1000000)
         #print(self.person_scheduler.people_spawning[:10])
         
     def step(self, action):
@@ -62,16 +63,19 @@ def RL_loop():
     # ...
         
     i=0
-    actions = [0,1,2,3,4,5,6,7,8,9]
+    actions = list(range(n_floors))
         
     max_tests = 100000
     num_tests = 0
     
     while (num_tests < max_tests):
-        i = (i+1) %10
-        state, reward = sim.step(actions[i])
+        i = (i+1) %n_floors
+        #state, reward = sim.step(actions[i])
+        a = np.random.randint(n_floors)
+        state, reward = sim.step(a)
         
-        if (num_tests %1000 == 0): print(num_tests)
+        
+        if (num_tests %1000 == 0): print(num_tests, state)
         
         num_tests += 1
         

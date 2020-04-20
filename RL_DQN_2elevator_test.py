@@ -17,8 +17,8 @@ import time
 import pyglet as pyglet
 
 n_floors = 5
-state_size = n_floors*4 #I determined this empirically. It's probably bad
-poisson_density = .05
+n_elevators = 2
+state_size = n_floors*(3+n_elevators) #I determined this empirically. It's probably bad
 reward_num_people = True
 
 import numpy as np
@@ -32,7 +32,7 @@ class Simulation_for_RL:
             self.sim = Simulator('RL_V1', step_func=realistic_physics_step_func, reward_func=reward_sum_wait_time,
                     rl_step_func=rl_step_func_v1)
         
-        self.elevators = [Elevator(1)]
+        self.elevators = [Elevator(i) for i in range(n_elevators)]#[Elevator(1)]
         self.building = Building(name=1, elevators=self.elevators, n_floors=n_floors)
         self.sim.init_building(self.building)
         
@@ -40,7 +40,7 @@ class Simulation_for_RL:
         # simulation.
         # Note: poisson_mean_density=.2 (means average spawn .2 people per second), seconds_to_schedule=100000 (don't
         # exceed this system time which is tracked in sim.total_time).
-        self.person_scheduler = PersonScheduler(self.building, poisson_mean_density=poisson_density, seconds_to_schedule=1000000)
+        self.person_scheduler = PersonScheduler(self.building, poisson_mean_density=.05, seconds_to_schedule=1000000)
         #print(self.person_scheduler.people_spawning[:10])
         
     def step(self, action):
@@ -84,29 +84,25 @@ MEMORY_SIZE = 2000
 BATCH_SIZE = 256#64
 GAMMA = 0.9
 TARGET_UPDATE = 10
-MAX_TIMESTEPS = 20000
+MAX_TIMESTEPS = 10000
 EPS_START = 1.0
 EPS_END = 0.01
 EPS_LENGTH = MAX_TIMESTEPS
-load_params = False
-use_softmax = False
 use_RNN = False #Ok, so don't use this. RNN's won't work because our batches are from random points in time. 
                 #We could save more in the ReplayBuffer to create sequences.
                 #Also, we need a variable length batch size to compute select_action which is hard in pytorch.
 device = torch.device("cpu")
-n_actions = n_floors #number floors
-param_file = "1elevator_parameters"+str(n_floors)
+n_actions = n_floors*n_elevators #number floors
+param_file = "2elevator_parameters"+str(n_floors)+'_'+str(n_elevators)
 if (use_RNN and reward_num_people): folder = 'RNN_figures_num_people'
 elif (not use_RNN and reward_num_people): folder = 'figures_num_people'
 elif (use_RNN and not reward_num_people): folder = 'RNN_figures_num_people'
 else: folder = 'figures_wait_time'
 try: #Make dir if doesn't exist
     os.mkdir(folder)
+    os.mkdir(folder+'/figures/')
 except FileExistsError:
-    try: #Make dir2 if doesn't exist - yea, this code is ugly
-        os.mkdir(folder+'/figures/')
-    except FileExistsError:
-        pass
+    pass
 # ===============================================================
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
@@ -289,13 +285,14 @@ def select_action(state):
             # t.max(1) will return largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
-            if (not use_softmax):
-                return policy_net.forward(state).argmax().view(1,1) #greedy version
+                #pick two actions
+            values = policy_net.forward(state)
+            a = []
+            for i in range(n_elevators):
+                a.append(values[n_floors*i:n_floors*(i+1)].argmax())
+            print(a) #FIX ME- no 2 elevator building exists yet
+            return a#policy_net.forward(state).argmax().view(1,1) #greedy version
             
-            else: #softmax version
-                probs = policy_net.forward(state)
-                m = Categorical(probs)
-                return m.sample().view(1,1)
     else:   # Non-greedy action
         return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
 # ===============================================================
@@ -316,31 +313,6 @@ def moving_average(data, window_size=100): #used this approach https://stackover
     ma_vec = (cumsum_vec[window_size:] - cumsum_vec[:-window_size]) / window_size
     return ma_vec
 # ===============================================================
-def plot_episode():
-    """
-    Prints an episode starting at initial position
-    """   
-    tmp = torch.tensor(env.reset().reshape(-1), device = device)
-    state = torch.zeros(state_size) 
-    for i in range(tmp.shape[0]): # sets the initial state
-        state[i] = tmp[i]
-        
-    env.print_state()
-    
-    while not env.check_end(): # While not a terminal state and not max iterations
-        # Select and perform an action
-        Q = target_net(state)
-        action = Q.argmax().view(1,1)
-        # Observe new state
-        state, reward = env.step(action.data)
-        tmp = torch.tensor(state.reshape(-1), device = device)
-        state = torch.zeros(state_size) 
-        for i in range(tmp.shape[0]): # sets the state
-            state[i] = tmp[i]
-        print(Q)
-        print(action, reward)
-        env.print_state()
-# ===============================================================
 
 if (use_RNN):
     policy_net = RNN(n_actions, state_size).to(device) # Initialize the behavior policy network
@@ -357,7 +329,7 @@ global steps_done
 steps_done = 0   
 
 #Tmp while broken: load existing params
-if (load_params): #load
+if (False): #load
     policy_net.load_state_dict(torch.load(folder+'/'+param_file))
     target_net.load_state_dict(policy_net.state_dict())
     target_net.eval()
@@ -376,7 +348,7 @@ t0 = time.time()
 #Init RL algo
 state, reward = sim.step(0)
 tmp = torch.tensor(state, device = device)
-state = torch.zeros(state_size) 
+state = torch.zeros(state_size)
 for i in range(tmp.shape[0]): # sets the initial state - doing it this way works around a bug
     state[i] = tmp[i]
     
@@ -435,25 +407,25 @@ while steps_done < MAX_TIMESTEPS:
         plt.plot(moving_average(return_at_step))
         plt.xlabel("Steps")
         plt.ylabel("Return")
-        plt.savefig(folder+'/figures/1elevator_'+str(n_floors)+'_'+str(steps_done)+'return.png')
+        plt.savefig(folder+'/figures/2elevator_'+str(n_floors)+'_'+str(n_elevators)+'_'+str(steps_done)+'return.png')
         plt.figure()
         plt.plot(reward_at_step)
         plt.plot(moving_average(reward_at_step))
         plt.xlabel("Steps")
         plt.ylabel("Reward")
-        plt.savefig(folder+'/figures/1elevator_'+str(n_floors)+'_'+str(steps_done)+'reward.png')
+        plt.savefig(folder+'/figures/2elevator_'+str(n_floors)+'_'+str(n_elevators)+'_'+str(steps_done)+'reward.png')
         plt.figure()
         plt.plot(action_taken)
         plt.plot(moving_average(action_taken))
         plt.xlabel("Steps")
         plt.ylabel("Action Taken")
-        plt.savefig(folder+'/figures/1elevator_'+str(n_floors)+'_'+str(steps_done)+'action.png')
+        plt.savefig(folder+'/figures/2elevator_'+str(n_floors)+'_'+str(n_elevators)+'_'+str(steps_done)+'action.png')
         plt.figure()
         plt.plot(loss_at_step)
         plt.plot(moving_average(loss_at_step))
         plt.xlabel("Steps")
         plt.ylabel("Loss")
-        plt.savefig(folder+'/figures/1elevator_'+str(n_floors)+'_'+str(steps_done)+'loss.png')
+        plt.savefig(folder+'/figures/2elevator_'+str(n_floors)+'_'+str(n_elevators)+'_'+str(steps_done)+'loss.png')
         plt.close('all')
         save(target_net, folder+'/'+param_file)
 
@@ -466,25 +438,25 @@ plt.plot(return_at_step)
 plt.plot(moving_average(return_at_step))
 plt.xlabel("Steps")
 plt.ylabel("Return")
-plt.savefig(folder+'/'+'1elevator'+str(n_floors)+'_return.png')
+plt.savefig(folder+'/'+'2elevator'+str(n_floors)+'_'+str(n_elevators)+'_return.png')
 plt.figure()
 plt.plot(reward_at_step)
 plt.plot(moving_average(reward_at_step))
 plt.xlabel("Steps")
 plt.ylabel("Reward")
-plt.savefig(folder+'/'+'1elevator_'+str(n_floors)+'_reward.png')
+plt.savefig(folder+'/'+'2elevator_'+str(n_floors)+'_'+str(n_elevators)+'_reward.png')
 plt.figure()
 plt.plot(action_taken)
 plt.plot(moving_average(action_taken))
 plt.xlabel("Steps")
 plt.ylabel("Action Taken")
-plt.savefig(folder+'/'+'1elevator_'+str(n_floors)+'_action.png')
+plt.savefig(folder+'/'+'2elevator_'+str(n_floors)+'_'+str(n_elevators)+'_action.png')
 plt.figure()
 plt.plot(loss_at_step)
 plt.plot(moving_average(loss_at_step))
 plt.xlabel("Steps")
 plt.ylabel("Loss")
-plt.savefig(folder+'/'+'1elevator_'+str(n_floors)+'_loss.png')
+plt.savefig(folder+'/'+'2elevator_'+str(n_floors)+'_'+str(n_elevators)+'_loss.png')
 plt.close('all')
 
 
