@@ -1,0 +1,9 @@
+fill the elevator up with ~10-20 people and then stop letting them show up. Train the elevator on this until nobody is there. Repeat.
+
+Long episodes seems to work better (10000 seconds or infinite) because people pile up which helps the elevator learn better. However, for infinite on large buildings people pile up before it can learn and it get's overwhelmed and doesn't learn. We balance this with 20000 second episodes so that the length advantage exists but we can apply what we learned by resetting. 
+
+
+Take away on longer elevator (20 floors). When Poisson rate is the same as smaller buildings, then elevator has trouble keeping up. Best we can learn is to go up then down. At lower Poisson it is possible to learn more individualized actions. 
+
+
+Note: Appears to be very sensitive to hyperparameters. 400 seconds not enough for 10/20

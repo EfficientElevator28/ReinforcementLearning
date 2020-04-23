@@ -16,7 +16,7 @@ from src.elevator import *
 import time
 import pyglet as pyglet
 
-n_floors = 5
+n_floors = 5#20
 state_size = n_floors*4 #I determined this empirically. It's probably bad
 poisson_density = .05
 reward_num_people = True
@@ -196,12 +196,13 @@ class DQN(nn.Module):
         self.input_size = input_size
         self.hidden1Size = 100
         self.hidden2Size = 100
+        self.hidden3Size = 100
         self.outputSize = n_actions
         # construct hidden and output layers for the network
         self.hidden1 = nn.Linear(self.input_size, self.hidden1Size) 
         self.hidden2 = nn.Linear(self.hidden1Size, self.hidden2Size)
-        #self.hidden3 = nn.Linear(self.hidden2Size, self.hidden3Size)
-        self.output = nn.Linear(self.hidden2Size, self.outputSize)
+        self.hidden3 = nn.Linear(self.hidden2Size, self.hidden3Size)
+        self.output = nn.Linear(self.hidden3Size, self.outputSize)
     # ===============================================   
     def forward(self, x):
         """
@@ -213,7 +214,7 @@ class DQN(nn.Module):
         """
         x = F.relu(self.hidden1(x))
         x = F.relu(self.hidden2(x))
-        #x = F.relu(self.hidden3(x))
+        x = F.relu(self.hidden3(x))
         x = -F.relu(self.output(x))
         return x 
 # ===============================================================

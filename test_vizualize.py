@@ -32,8 +32,13 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from torch.distributions import Categorical
 
-n_floors = 5#20
-state_size = n_floors*4 
+import sys
+
+use_wait_time = False
+
+n_floors = int(sys.argv[1])#20
+if (use_wait_time): state_size = n_floors*4 +n_floors*2 + 1
+else: state_size = n_floors*4
 reward_num_people = True
 
 use_softmax = False
@@ -41,10 +46,13 @@ use_RNN = False #Don't use
 device = torch.device("cpu")
 n_actions = n_floors #number floors
 param_file = "1elevator_parameters"+str(n_floors)
-if (use_RNN and reward_num_people): folder = 'RNN_figures_num_people'
-elif (not use_RNN and reward_num_people): folder = 'figures_num_people'
-elif (use_RNN and not reward_num_people): folder = 'RNN_figures_num_people'
-else: folder = 'figures_wait_time'
+#folder = 'RNN_figures_num_people'
+#folder = 'figures_num_people'
+#folder = 'RNN_figures_num_people'
+#folder = 'figures_wait_time'
+#folder = 'figures_num_people_episode_version'
+#folder = 'figures_wait_time_episode_version'
+folder = sys.argv[2]
 
 # ===============================================================
 class DQN(nn.Module):
@@ -56,11 +64,13 @@ class DQN(nn.Module):
         """
         super(DQN, self).__init__()
         
-        self.inputSize = input_size
+        self.input_size = input_size
         self.hidden1Size = 100
         self.hidden2Size = 100
+        self.hidden3Size = 100
         self.outputSize = n_actions
-        self.hidden1 = nn.Linear(self.inputSize, self.hidden1Size) # construct hidden and output layers for the network
+        # construct hidden and output layers for the network
+        self.hidden1 = nn.Linear(self.input_size, self.hidden1Size) 
         self.hidden2 = nn.Linear(self.hidden1Size, self.hidden2Size)
         #self.hidden3 = nn.Linear(self.hidden2Size, self.hidden3Size)
         self.output = nn.Linear(self.hidden2Size, self.outputSize)
@@ -76,7 +86,7 @@ class DQN(nn.Module):
         x = F.relu(self.hidden1(x))
         x = F.relu(self.hidden2(x))
         #x = F.relu(self.hidden3(x))
-        x = -self.output(x)
+        x = -F.relu(self.output(x))
         return x 
         
 # ===============================================================
